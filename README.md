@@ -36,6 +36,8 @@ docker run -p 8080:8080 --rm markitdown:latest
 
 Сервис будет доступен на проброшенном порту на хосте (пример: http://localhost:8080).
 
+**Важно**: Все эндпоинты доступны по префиксу `/convert`, что упрощает проксирование через nginx.
+
 ## Поддерживаемые форматы
 
 Сервис использует библиотеку **markitdown** (Microsoft) для конвертации различных форматов документов в Markdown.
@@ -69,31 +71,33 @@ docker run -p 8080:8080 --rm markitdown:latest
 
 ## Основные HTTP-эндпоинты
 
-### GET /health
+Все эндпоинты доступны по префиксу `/convert`.
+
+### GET /convert/health
 
 Проверка состояния сервиса.
 
 **Пример (Linux/macOS):**
 
 ```bash
-curl http://localhost:8080/health
+curl http://localhost:8080/convert/health
 ```
 
 **Пример (Windows PowerShell):**
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:8080/health
+Invoke-RestMethod -Uri http://localhost:8080/convert/health
 ```
 
 **Ответ:**
 
 ```json
-{"status": "ok"}
+{"status": "healthy", "service": "markitdown-converter", "version": "1.0.0"}
 ```
 
 ---
 
-### POST /convert
+### POST /convert/upload
 
 Загрузить файл и получить Markdown.
 
@@ -103,7 +107,7 @@ Invoke-RestMethod -Uri http://localhost:8080/health
 **Пример (Linux/macOS):**
 
 ```bash
-curl -X POST http://localhost:8080/convert \
+curl -X POST http://localhost:8080/convert/upload \
   -F "file=@/path/to/document.pdf"
 ```
 
@@ -111,7 +115,7 @@ curl -X POST http://localhost:8080/convert \
 
 ```powershell
 $filePath = "C:\path\to\document.pdf"
-$uri = "http://localhost:8080/convert"
+$uri = "http://localhost:8080/convert/upload"
 $form = @{
     file = Get-Item -Path $filePath
 }
@@ -122,41 +126,75 @@ Invoke-RestMethod -Uri $uri -Method Post -Form $form
 
 ```json
 {
-  "markdown": "# Документ\n\nСодержимое...",
-  "title": "document.pdf",
-  "metadata": {}
+  "filename": "document.pdf",
+  "content": "# Документ\n\nСодержимое...",
+  "format": "markdown",
+  "processing_time": 0.5,
+  "file_size": 12345
 }
 ```
 
 ---
 
-### GET /supported-formats
+### GET /convert/supported-formats
 
 Получить список поддерживаемых форматов.
 
 **Пример (Linux/macOS):**
 
 ```bash
-curl http://localhost:8080/supported-formats
+curl http://localhost:8080/convert/supported-formats
 ```
 
 **Пример (Windows PowerShell):**
 
 ```powershell
-Invoke-RestMethod -Uri http://localhost:8080/supported-formats
+Invoke-RestMethod -Uri http://localhost:8080/convert/supported-formats
 ```
 
 **Ответ:**
 
 ```json
 {
-  "formats": [".pdf", ".docx", ".pptx", ".xlsx", ".html", ".htm", ".jpg", ".jpeg", ".png", ".zip", ".csv", ".json", ".xml", ".txt", ".md"]
+  "supported_formats": [".pdf", ".docx", ".pptx", ".xlsx", ".html", ".htm", ".jpg", ".jpeg", ".png", ".zip", ".csv", ".json", ".xml", ".txt", ".md"],
+  "count": 15
 }
 ```
+
+---
+
+### GET /convert/docs
+
+Swagger UI документация (интерактивная).
 
 ## Замена статических файлов
 
 Чтобы заменить Swagger UI или другие статические файлы, пробросьте локальную папку `./static` в контейнер через volumes в `docker-compose.yml` или через `-v` при `docker run`.
+
+## Проксирование через nginx
+
+Пример конфигурации nginx для проксирования сервиса:
+
+```nginx
+location /convert/ {
+    proxy_buffering off;
+    proxy_redirect off;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-Prefix /convert;
+    proxy_pass http://172.30.1.117:8080/convert/;
+}
+
+location /static/ {
+    proxy_pass http://172.30.1.117:8080/static/;
+}
+```
+
+Теперь сервис будет доступен по адресу: `https://your-domain.com/convert/docs`
 
 ## Примечание
 

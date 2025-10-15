@@ -175,7 +175,8 @@ app = FastAPI(
     version="1.0.0",
     docs_url=None,  # Отключаем стандартный Swagger UI
     redoc_url=None,
-    openapi_url="/openapi.json"
+    openapi_url="/convert/openapi.json",  # OpenAPI по префиксу /convert
+    root_path="/convert"  # Базовый путь для всех эндпоинтов
 )
 
 # Кастомизация OpenAPI схемы
@@ -201,13 +202,13 @@ static_path = Path(__file__).parent / "static"
 if static_path.exists():
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
 
-@app.get("/", include_in_schema=False)
+@app.get("/convert/", include_in_schema=False)
 async def redirect_to_docs():
     """Перенаправляет корневой URL на документацию"""
-    return RedirectResponse(url="/docs")
+    return RedirectResponse(url="/convert/docs")
 
 
-@app.get("/docs", include_in_schema=False)
+@app.get("/convert/docs", include_in_schema=False)
 async def custom_swagger_ui_html():
     """Возвращает кастомный Swagger UI с локальными файлами"""
     html_content = """
@@ -232,7 +233,7 @@ async def custom_swagger_ui_html():
             window.onload = function() {
                 try {
                     window.ui = SwaggerUIBundle({
-                        url: "/openapi.json",
+                        url: "/convert/openapi.json",
                         dom_id: '#swagger-ui',
                         deepLinking: true,
                         presets: [SwaggerUIBundle.presets.apis, SwaggerUIStandalonePreset],
@@ -249,9 +250,9 @@ async def custom_swagger_ui_html():
                         '<h2>MarkItDown API</h2>' +
                         '<p>Swagger UI не загружен. Используйте прямые запросы:</p>' +
                         '<ul style="text-align: left; display: inline-block;">' +
-                        '<li>GET /health - проверка состояния</li>' +
-                        '<li>GET /supported-formats - поддерживаемые форматы</li>' +
-                        '<li>POST /convert - конвертация документа</li>' +
+                        '<li>GET /convert/health - проверка состояния</li>' +
+                        '<li>GET /convert/supported-formats - поддерживаемые форматы</li>' +
+                        '<li>POST /convert/upload - конвертация документа</li>' +
                         '</ul></div>';
                 }
             }
@@ -262,7 +263,7 @@ async def custom_swagger_ui_html():
     return HTMLResponse(content=html_content)
 
 
-@app.get("/health", 
+@app.get("/convert/health", 
          summary="Проверка состояния сервиса",
          description="Проверка работоспособности API")
 async def health_check():
@@ -278,7 +279,7 @@ async def health_check():
     )
 
 
-@app.get("/supported-formats",
+@app.get("/convert/supported-formats",
          summary="Список поддерживаемых форматов",
          description="Возвращает список форматов файлов, которые поддерживает сервис")
 async def get_supported_formats():
@@ -294,7 +295,7 @@ async def get_supported_formats():
     )
 
 
-@app.post("/convert",
+@app.post("/convert/upload",
           response_model=DocumentOutput,
           summary="Конвертация документа в Markdown",
           description="Принимает файл любого поддерживаемого формата (документы, изображения, PDF, HTML, архивы, текст, csv, json, xml) и возвращает его содержимое в Markdown",
