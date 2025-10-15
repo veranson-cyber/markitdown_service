@@ -1,0 +1,14 @@
+version: "3.8"
+
+services:
+  markitdown:
+    build: .
+    container_name: markitdown_service
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    environment:
+      - PYTHONUNBUFFERED=1
+    # Если нужно пробросить локальную директорию со статикой или моделями, раскомментируйте ниже
+    # volumes:
+    #   - ./static:/app/static:ro
