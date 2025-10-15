@@ -1,4 +1,4 @@
 fastapi
 uvicorn[standard]
-markitdown
+markitdown[all]
 python-multipart
