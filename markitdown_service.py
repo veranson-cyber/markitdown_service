@@ -68,7 +68,8 @@ def process_with_markitdown_sync(file_path: str, filename: str) -> dict:
     try:
         from markitdown import MarkItDown
         
-        md = MarkItDown()
+        # Инициализируем с включённым OCR для изображений и отсканированных PDF
+        md = MarkItDown(enable_ocr=True)
         result = md.convert(file_path)
 
         # Извлекаем текст из результата
