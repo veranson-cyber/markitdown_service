@@ -2,3 +2,6 @@ fastapi
 uvicorn[standard]
 markitdown[all]
 python-multipart
+pytesseract
+pdf2image
+Pillow
