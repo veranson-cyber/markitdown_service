@@ -58,9 +58,60 @@ class DocumentOutput(BaseModel):
     file_size: int = 0
 
 
+def needs_ocr_for_pdf(file_path: str) -> bool:
+    """
+    Проверяет, нужен ли OCR для PDF (отсканированный документ без текстового слоя).
+    """
+    try:
+        import pdfminer.high_level
+        
+        # Пытаемся извлечь текст
+        text = pdfminer.high_level.extract_text(file_path)
+        
+        # Если текста очень мало (меньше 50 символов), вероятно это отсканированное изображение
+        return len(text.strip()) < 50
+    except Exception as e:
+        logger.warning(f"Не удалось проверить PDF на наличие текста: {e}")
+        return False
+
+
+def ocr_pdf_with_tesseract(file_path: str) -> str:
+    """
+    Выполняет OCR для PDF-файла, конвертируя страницы в изображения и распознавая текст.
+    """
+    try:
+        from pdf2image import convert_from_path
+        import pytesseract
+        
+        logger.info(f"🔍 Начинаем OCR для отсканированного PDF: {file_path}")
+        
+        # Конвертируем PDF в изображения (DPI 300 для лучшего качества)
+        images = convert_from_path(file_path, dpi=300)
+        logger.info(f"📄 Конвертировано {len(images)} страниц в изображения")
+        
+        # Распознаём текст с каждой страницы
+        markdown_content = []
+        for i, image in enumerate(images, 1):
+            logger.info(f"🔎 Распознавание страницы {i}/{len(images)}...")
+            # OCR с поддержкой русского и английского языков
+            text = pytesseract.image_to_string(image, lang='rus+eng')
+            
+            if text.strip():
+                markdown_content.append(f"# Страница {i}\n\n{text.strip()}\n")
+        
+        result = "\n---\n\n".join(markdown_content)
+        logger.info(f"✅ OCR завершён: распознано {len(result)} символов")
+        return result
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка OCR для PDF: {e}")
+        raise
+
+
 def process_with_markitdown_sync(file_path: str, filename: str) -> dict:
     """
     Синхронная функция для обработки документа с помощью markitdown.
+    Для отсканированных PDF использует OCR через pytesseract.
     Используется в пуле процессов для параллельной обработки.
     """
     start_time = time.time()
@@ -68,16 +119,23 @@ def process_with_markitdown_sync(file_path: str, filename: str) -> dict:
     try:
         from markitdown import MarkItDown
         
-        # Инициализируем с включённым OCR для изображений и отсканированных PDF
-        md = MarkItDown(enable_ocr=True)
-        result = md.convert(file_path)
-
-        # Извлекаем текст из результата
-        content = (
-            getattr(result, "text_content", None)
-            or getattr(result, "markdown", None)
-            or str(result)
-        )
+        file_ext = os.path.splitext(filename)[1].lower()
+        
+        # Для PDF проверяем, нужен ли OCR
+        if file_ext == '.pdf' and needs_ocr_for_pdf(file_path):
+            logger.info(f"📑 Обнаружен отсканированный PDF без текстового слоя: {filename}")
+            content = ocr_pdf_with_tesseract(file_path)
+        else:
+            # Стандартная обработка через markitdown
+            md = MarkItDown()
+            result = md.convert(file_path)
+            
+            # Извлекаем текст из результата
+            content = (
+                getattr(result, "text_content", None)
+                or getattr(result, "markdown", None)
+                or str(result)
+            )
         
         processing_time = time.time() - start_time
         file_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0
@@ -93,7 +151,7 @@ def process_with_markitdown_sync(file_path: str, filename: str) -> dict:
         
     except Exception as e:
         processing_time = time.time() - start_time
-        logger.error(f"Ошибка markitdown при обработке {filename}: {e}")
+        logger.error(f"Ошибка при обработке {filename}: {e}")
         return {
             "success": False,
             "filename": filename or "document",
