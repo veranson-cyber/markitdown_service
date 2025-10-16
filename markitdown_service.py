@@ -175,8 +175,7 @@ app = FastAPI(
     version="1.0.0",
     docs_url=None,  # Отключаем стандартный Swagger UI
     redoc_url=None,
-    openapi_url="/convert/openapi.json",  # OpenAPI по префиксу /convert
-    root_path="/convert"  # Базовый путь для всех эндпоинтов
+    openapi_url="/convert/openapi.json"
 )
 
 # Кастомизация OpenAPI схемы
@@ -201,6 +200,11 @@ app.openapi = custom_openapi
 static_path = Path(__file__).parent / "static"
 if static_path.exists():
     app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
+
+@app.get("/", include_in_schema=False)
+async def root():
+    """Корневой эндпоинт - редирект на документацию"""
+    return RedirectResponse(url="/convert/docs")
 
 @app.get("/convert/", include_in_schema=False)
 async def redirect_to_docs():
